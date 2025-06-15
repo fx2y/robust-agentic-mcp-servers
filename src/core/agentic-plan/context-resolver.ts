@@ -16,6 +16,11 @@ export class ContextResolver implements IContextResolver {
         throw new Error(`JSONPath ${pointer.jsonPath} resolved to undefined`);
       }
 
+      // If result is an array with one element, return the element directly
+      if (Array.isArray(result) && result.length === 1) {
+        return result[0];
+      }
+
       return result;
     } catch (error) {
       throw new Error(`Failed to resolve JSONPath ${pointer.jsonPath}: ${error instanceof Error ? error.message : String(error)}`);

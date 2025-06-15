@@ -1,0 +1,55 @@
+{
+  "planId": "math::conditional_add",
+  "description": "Adds two numbers and returns a message based on whether the sum is positive.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "num1": { "type": "number", "description": "The first number." },
+      "num2": { "type": "number", "description": "The second number." }
+    },
+    "required": ["num1", "num2"]
+  },
+  "startStepId": "add_numbers",
+  "steps": [
+    {
+      "id": "add_numbers",
+      "type": "tool_call",
+      "toolId": "math::add",
+      "arguments": {
+        "a": { "jsonPath": "$.promptInput.num1" },
+        "b": { "jsonPath": "$.promptInput.num2" }
+      },
+      "nextStepId": "check_if_positive"
+    },
+    {
+      "id": "check_if_positive",
+      "type": "tool_call",
+      "toolId": "validate::is_positive",
+      "arguments": {
+        "num": { "jsonPath": "$.history[?(@.planStepId=='add_numbers')].result.output" }
+      },
+      "nextStepId": "branch_on_result"
+    },
+    {
+      "id": "branch_on_result",
+      "type": "conditional_branch",
+      "condition": {
+        "left": { "jsonPath": "$.history[?(@.planStepId=='check_if_positive')].result.output" },
+        "operator": "equals",
+        "right": true
+      },
+      "onTrue": { "nextStepId": "positive_response" },
+      "onFalse": { "nextStepId": "non_positive_response" }
+    },
+    {
+      "id": "positive_response",
+      "type": "final_response",
+      "message": "The result is positive."
+    },
+    {
+      "id": "non_positive_response",
+      "type": "final_response",
+      "message": "The result is not positive."
+    }
+  ]
+}
