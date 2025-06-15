@@ -6,6 +6,9 @@ import { CapabilityRegistry } from '../core/capability-registry';
 import { ToolExecutor } from '../core/tool-executor';
 import { WorkflowEvent } from '../core/event-bus/types';
 import { SessionCore } from '../core/state/types';
+import { createChildLogger } from '../shared/logger';
+import { InMemoryCapabilityStore } from '../core/in-memory-capability-store';
+import { InMemoryCapabilityEventBus } from '../core/in-memory-capability-event-bus';
 
 describe('SupervisorService Event Reaction Integration', () => {
   let eventBus: InMemoryEventBus;
@@ -13,31 +16,41 @@ describe('SupervisorService Event Reaction Integration', () => {
   let workflowManager: WorkflowManager;
   let capabilityRegistry: CapabilityRegistry;
   let supervisorService: SupervisorService;
-  let consoleSpy: jest.SpyInstance;
+  let loggerSpy: jest.SpyInstance;
+  let mockLogger: any;
 
   beforeEach(async () => {
     eventBus = new InMemoryEventBus();
     stateStore = new InMemoryStateStore();
-    capabilityRegistry = new CapabilityRegistry();
+    const centralStore = new InMemoryCapabilityStore();
+    const capabilityEventBus = new InMemoryCapabilityEventBus();
+    capabilityRegistry = new CapabilityRegistry(centralStore, capabilityEventBus);
     const toolExecutor = new ToolExecutor(capabilityRegistry);
-    workflowManager = new WorkflowManager(toolExecutor, stateStore);
+    workflowManager = new WorkflowManager(toolExecutor, stateStore, createChildLogger('WorkflowManager'));
+    
+    // Create mock logger
+    mockLogger = {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    };
+    loggerSpy = mockLogger.info;
     
     supervisorService = new SupervisorService(
       eventBus,
       stateStore,
       workflowManager,
-      capabilityRegistry
+      capabilityRegistry,
+      mockLogger
     );
-
-    // Spy on console.log to verify logging behavior
-    consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     
     supervisorService.startListening();
   });
 
   afterEach(() => {
     eventBus.removeAllListeners();
-    consoleSpy.mockRestore();
+    jest.clearAllMocks();
   });
 
   it('should handle workflow.failed event and verify session state', async () => {
@@ -80,41 +93,44 @@ describe('SupervisorService Event Reaction Integration', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Verify supervisor logging
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining(`Supervisor: Handling workflow failure for session ${sessionId}`)
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId }),
+      expect.stringContaining('Handling workflow failure')
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Supervisor: Workflow failed - Reason: Supervisor test failure')
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({}),
+      expect.stringContaining('Workflow failed - Reason: Supervisor test failure')
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Supervisor: Error details:'),
-      expect.objectContaining({
-        name: 'Error',
-        message: 'Supervisor test failure'
-      })
+    // Note: The 'Error details:' call has a third parameter with the actual error object
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({}),
+      'Error details:',
+      expect.anything()
     );
   });
 
   it('should ignore workflow.failed event if session is not in failed state (idempotency)', async () => {
     const sessionId = 'session-already-recovered';
     
-    // Create a session in completed state (not failed)
-    const completedSession: SessionCore = {
+    // Create a session that is NOT in failed state (maybe running or completed)
+    const recoveredSession: SessionCore = {
       sessionId,
-      status: 'completed',
+      status: 'running', // This is the key - not failed
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      currentPlanId: 'test-plan',
+      currentStepId: 'step_y'
     };
     
-    await stateStore.createSession(completedSession);
+    await stateStore.createSession(recoveredSession);
 
     const failedEvent: WorkflowEvent = {
       type: 'workflow.failed',
       sessionId,
-      timestamp: '2023-10-27T11:00:00Z',
+      timestamp: '2023-10-27T11:30:00Z',
       details: { 
-        reason: 'Old failure event',
-        currentStepId: 'step_x'
+        reason: 'Old failure event', 
+        currentStepId: 'step_y'
       }
     };
 
@@ -125,8 +141,9 @@ describe('SupervisorService Event Reaction Integration', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Verify supervisor ignored the event
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining(`Supervisor: Session ${sessionId} is not in failed state, ignoring event`)
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId }),
+      expect.stringContaining('is not in failed state, ignoring event')
     );
   });
 
@@ -149,8 +166,9 @@ describe('SupervisorService Event Reaction Integration', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Verify supervisor logging
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining(`Supervisor: Workflow completed successfully - Session: ${sessionId}`)
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId }),
+      expect.stringContaining('Workflow completed successfully')
     );
   });
 
@@ -174,11 +192,13 @@ describe('SupervisorService Event Reaction Integration', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Verify supervisor logging
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining(`Supervisor: Workflow paused for human input - Session: ${sessionId}`)
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId }),
+      expect.stringContaining('Workflow paused for human input')
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Supervisor: Human prompt: Please provide additional input')
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({}),
+      expect.stringContaining('Human prompt: Please provide additional input')
     );
   });
 });

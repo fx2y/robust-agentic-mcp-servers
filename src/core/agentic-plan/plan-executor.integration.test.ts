@@ -8,6 +8,9 @@ import { ToolExecutor } from '../tool-executor';
 import { WorkflowEvent } from '../event-bus/types';
 import { AgenticPlan } from './types';
 import { ToolDefinition, PureToolImplementation } from '../tool-definition';
+import { createChildLogger } from '../../shared/logger';
+import { InMemoryCapabilityStore } from '../in-memory-capability-store';
+import { InMemoryCapabilityEventBus } from '../in-memory-capability-event-bus';
 
 describe('PlanExecutor Failure Handling Integration', () => {
   let stateStore: InMemoryStateStore;
@@ -22,10 +25,12 @@ describe('PlanExecutor Failure Handling Integration', () => {
   beforeEach(async () => {
     stateStore = new InMemoryStateStore();
     eventBus = new InMemoryEventBus();
-    capabilityRegistry = new CapabilityRegistry();
+    const centralStore = new InMemoryCapabilityStore();
+    const capabilityEventBus = new InMemoryCapabilityEventBus();
+    capabilityRegistry = new CapabilityRegistry(centralStore, capabilityEventBus);
     contextResolver = new ContextResolver();
     toolExecutor = new ToolExecutor(capabilityRegistry);
-    workflowManager = new WorkflowManager(toolExecutor, stateStore);
+    workflowManager = new WorkflowManager(toolExecutor, stateStore, createChildLogger('WorkflowManager'));
     
     eventSpy = jest.fn();
     eventBus.on('workflow.failed', eventSpy);
@@ -35,7 +40,8 @@ describe('PlanExecutor Failure Handling Integration', () => {
       workflowManager,
       capabilityRegistry,
       contextResolver,
-      eventBus
+      eventBus,
+      createChildLogger('PlanExecutor')
     );
 
     // Register failing tool
@@ -80,7 +86,7 @@ describe('PlanExecutor Failure Handling Integration', () => {
     const sessionId = 'session-fail-test-456';
     await workflowManager.createSession(sessionId);
     
-    const plan = capabilityRegistry.getPlan('test::plan_that_fails');
+    const plan = await capabilityRegistry.getPlan('test::plan_that_fails');
     if (!plan) throw new Error('Plan not found');
 
     await planExecutor.execute(sessionId, plan, {});

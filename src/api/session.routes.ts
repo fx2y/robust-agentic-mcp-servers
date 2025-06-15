@@ -1,8 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { SessionCore, HistoryEntry } from '../shared/types';
 import { CreateSessionRequest, ExecutePlanRequest, ResumeSessionRequest } from './types';
 import { ApiDependencies } from './index';
-import { AgenticPlan } from '../core/agentic-plan/types';
 
 export async function sessionRoutes(fastify: FastifyInstance) {
   const { workflowManager, centralCapabilityStore } = fastify.dependencies as ApiDependencies;

@@ -1,7 +1,8 @@
-import { IWorkflowEventListener, WorkflowEvent, WorkflowEventHandler } from '../core/event-bus';
+import { IWorkflowEventListener, WorkflowEvent } from '../core/event-bus';
 import { IStateStore } from '../core/state/state-store.interface';
 import { IWorkflowManager } from '../core/workflow-manager';
 import { ICapabilityRegistry } from '../core/capability-registry';
+import pino from 'pino';
 
 export interface ISupervisorService {
   startListening(): Promise<void>;
@@ -12,7 +13,8 @@ export class SupervisorService implements ISupervisorService {
     private eventListener: IWorkflowEventListener,
     private stateStore: IStateStore,
     private workflowManager: IWorkflowManager,
-    private capabilityRegistry: ICapabilityRegistry
+    private capabilityRegistry: ICapabilityRegistry,
+    private logger: pino.Logger
   ) {}
 
   async startListening(): Promise<void> {
@@ -25,12 +27,12 @@ export class SupervisorService implements ISupervisorService {
 
   private async handleWorkflowFailed(event: WorkflowEvent): Promise<void> {
     try {
-      console.log(`Supervisor: Handling workflow failure for session ${event.sessionId}`);
+      this.logger.info({ sessionId: event.sessionId }, 'Handling workflow failure for session');
       
       // Check if we should process this failure event (idempotency check)
       const sessionCore = await this.stateStore.readSessionCore(event.sessionId);
       if (!sessionCore) {
-        console.log(`Supervisor: Session ${event.sessionId} not found, ignoring event`);
+        this.logger.info({ sessionId: event.sessionId }, 'Session not found, ignoring event');
         return;
       }
       
@@ -38,7 +40,10 @@ export class SupervisorService implements ISupervisorService {
       // In a real implementation, this would use a persistent store
       // For now, we'll just log and process all events
       if (sessionCore.status === 'failed') {
-        console.log(`Supervisor: Processing failure event for session ${event.sessionId} in failed state`);
+        this.logger.info({ sessionId: event.sessionId }, 'Processing failure event for session in failed state');
+      } else {
+        this.logger.info({ sessionId: event.sessionId }, 'Session is not in failed state, ignoring event');
+        return;
       }
 
       // For now, log the failure details
@@ -46,21 +51,21 @@ export class SupervisorService implements ISupervisorService {
       // 1. Analyze the error context
       // 2. Generate a corrective plan using an LLM
       // 3. Execute the corrective plan
-      console.log(`Supervisor: Workflow failed - Reason: ${event.details.reason}`);
-      console.log(`Supervisor: Error details:`, event.details.error);
+      this.logger.info({}, `Workflow failed - Reason: ${event.details.reason}`);
+      this.logger.info({}, 'Error details:', event.details.error);
 
       // Placeholder for future corrective action
       // await this.generateAndExecuteCorrectivePlan(event);
       
     } catch (error) {
-      console.error(`Supervisor: Error handling workflow failure:`, error);
+      this.logger.error({ error }, 'Error handling workflow failure');
     }
   }
 
   private async handleWorkflowPaused(event: WorkflowEvent): Promise<void> {
     try {
-      console.log(`Supervisor: Workflow paused for human input - Session: ${event.sessionId}`);
-      console.log(`Supervisor: Human prompt: ${event.details.reason}`);
+      this.logger.info({ sessionId: event.sessionId }, 'Workflow paused for human input');
+      this.logger.info({}, `Human prompt: ${event.details.reason}`);
       
       // In a production system, this might:
       // 1. Send notifications to relevant users
@@ -68,13 +73,13 @@ export class SupervisorService implements ISupervisorService {
       // 3. Log for monitoring/alerting
       
     } catch (error) {
-      console.error(`Supervisor: Error handling workflow pause:`, error);
+      this.logger.error({ error }, 'Error handling workflow pause');
     }
   }
 
   private async handleWorkflowCompleted(event: WorkflowEvent): Promise<void> {
     try {
-      console.log(`Supervisor: Workflow completed successfully - Session: ${event.sessionId}`);
+      this.logger.info({ sessionId: event.sessionId }, 'Workflow completed successfully');
       
       // In a production system, this might:
       // 1. Send completion notifications
@@ -82,7 +87,7 @@ export class SupervisorService implements ISupervisorService {
       // 3. Update metrics/analytics
       
     } catch (error) {
-      console.error(`Supervisor: Error handling workflow completion:`, error);
+      this.logger.error({ error }, 'Error handling workflow completion');
     }
   }
 

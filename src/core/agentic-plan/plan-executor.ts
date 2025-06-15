@@ -11,6 +11,7 @@ import { IContextResolver } from './context-resolver.interface';
 import { ToolExecutionRequest } from '../tool-executor';
 import { IStateStore } from '../state/state-store.interface';
 import { IWorkflowEventEmitter, WorkflowEvent } from '../event-bus';
+import pino from 'pino';
 
 export class PlanExecutor implements IPlanExecutor {
   private ajv = new Ajv();
@@ -19,7 +20,8 @@ export class PlanExecutor implements IPlanExecutor {
     private workflowManager: IWorkflowManager,
     private capabilityRegistry: ICapabilityRegistry,
     private contextResolver: IContextResolver,
-    private eventEmitter: IWorkflowEventEmitter
+    private eventEmitter: IWorkflowEventEmitter,
+    private logger: pino.Logger
   ) {}
 
   async execute(sessionId: string, plan: AgenticPlan, initialArgs: any): Promise<SessionCore> {

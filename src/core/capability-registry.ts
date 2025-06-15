@@ -39,11 +39,11 @@ export class CapabilityRegistry implements ICapabilityRegistry {
   }
 
   private setupEventListeners(): void {
-    this.eventListener.on('capability.updated', (id, type) => {
+    this.eventListener.on('capability.updated', (id, _type) => {
       this.invalidateLocalCache(id);
     });
     
-    this.eventListener.on('capability.deleted', (id, type) => {
+    this.eventListener.on('capability.deleted', (id, _type) => {
       this.removeFromLocalCache(id);
     });
   }
@@ -168,7 +168,7 @@ export class CapabilityRegistry implements ICapabilityRegistry {
 
   private hasNonSerializableProperties(original: any, parsed: any): boolean {
     for (const key in original) {
-      if (original.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(original, key)) {
         const originalValue = original[key];
         const parsedValue = parsed[key];
         

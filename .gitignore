@@ -2,4 +2,5 @@ dist
 node_modules
 
 .ai
-server.log
+server*.log
+coverage

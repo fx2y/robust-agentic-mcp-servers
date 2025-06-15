@@ -12,13 +12,9 @@ import { RedisCentralCapabilityStore } from './core/redis-central-capability-sto
 import { RedisCapabilityEventBus } from './core/redis-capability-event-bus';
 import { SandboxService } from './services/sandbox.service';
 import { createApiServer } from './api/index';
+import { config } from './shared/config';
+import { logger, createChildLogger } from './shared/logger';
 
-export interface ServerConfig {
-  redisUrl?: string;
-  sandboxServiceUrl?: string;
-  apiPort?: number;
-  adminApiKey?: string;
-}
 
 export class AgenticMCPServer {
   private redis: Redis;
@@ -34,10 +30,11 @@ export class AgenticMCPServer {
   private supervisorService: SupervisorService;
   private sandboxService: SandboxService;
   private apiServer: any;
+  private logger = createChildLogger('AgenticMCPServer');
 
-  constructor(private config: ServerConfig = {}) {
+  constructor() {
     // Initialize Redis connection
-    this.redis = new Redis(this.config.redisUrl || 'redis://localhost:6379');
+    this.redis = new Redis(config.redisUrl);
     
     // Initialize distributed stores and event bus
     this.centralCapabilityStore = new RedisCentralCapabilityStore(this.redis);
@@ -56,19 +53,22 @@ export class AgenticMCPServer {
     this.eventBus = new InMemoryEventBus();
     
     // Initialize sandbox service
-    this.sandboxService = new SandboxService(
-      this.config.sandboxServiceUrl || 'http://localhost:8080'
-    );
+    this.sandboxService = new SandboxService(config.sandboxServiceUrl);
     
     // Initialize workflow manager first (without plan executor)
-    this.workflowManager = new WorkflowManager(this.toolExecutor, this.stateStore);
+    this.workflowManager = new WorkflowManager(
+      this.toolExecutor, 
+      this.stateStore, 
+      createChildLogger('WorkflowManager')
+    );
     
     // Initialize plan executor with event emitter
     this.planExecutor = new PlanExecutor(
       this.workflowManager,
       this.capabilityRegistry,
       this.contextResolver,
-      this.eventBus
+      this.eventBus,
+      createChildLogger('PlanExecutor')
     );
     
     // Now inject the plan executor back into workflow manager
@@ -79,55 +79,55 @@ export class AgenticMCPServer {
       this.eventBus,
       this.stateStore,
       this.workflowManager,
-      this.capabilityRegistry
+      this.capabilityRegistry,
+      createChildLogger('SupervisorService')
     );
   }
 
   async start(): Promise<void> {
-    console.log('Starting Agentic MCP Server...');
+    this.logger.info('Starting Agentic MCP Server...');
     
     try {
       // Test Redis connection
       await this.redis.ping();
-      console.log('Redis connection established');
+      this.logger.info('Redis connection established');
     } catch (error) {
-      console.error('Failed to connect to core dependency: Redis:', error);
+      this.logger.fatal({ error }, 'Failed to connect to core dependency: Redis');
       process.exit(1);
     }
     
     // Start capability event listener
     this.capabilityEventBus.startListening();
-    console.log('Capability event bus started');
+    this.logger.info('Capability event bus started');
     
     // Load capabilities (tools and plans)
     await this.loadCapabilities();
     
     // Start the supervisor service to listen for workflow events
     await this.supervisorService.startListening();
-    console.log('Supervisor service started and listening for workflow events');
+    this.logger.info('Supervisor service started and listening for workflow events');
     
     // Create and start API server
     this.apiServer = await createApiServer({
       workflowManager: this.workflowManager,
       centralCapabilityStore: this.centralCapabilityStore,
       capabilityEventEmitter: this.capabilityEventBus,
-      adminApiKey: this.config.adminApiKey
+      adminApiKey: config.adminApiKey
     });
     
-    const port = this.config.apiPort || 3000;
-    await this.apiServer.listen({ port, host: '0.0.0.0' });
-    console.log(`MCP Server listening on port ${port}`);
+    await this.apiServer.listen({ port: config.port, host: '0.0.0.0' });
+    this.logger.info({ port: config.port }, 'MCP Server listening on port');
     
-    console.log('Agentic MCP Server started successfully');
+    this.logger.info('Agentic MCP Server started successfully');
     const capabilities = await this.capabilityRegistry.listAllCapabilities();
-    console.log('Available capabilities:', capabilities);
+    this.logger.info({ capabilities }, 'Available capabilities loaded');
   }
 
   private async loadCapabilities(): Promise<void> {
     // This would typically load capabilities from the filesystem
     // For now, we'll register the existing test capabilities
     
-    console.log('Loading capabilities...');
+    this.logger.info('Loading capabilities...');
     
     try {
       // Load math tools
@@ -156,28 +156,28 @@ export class AgenticMCPServer {
       const failureTestPlan = await import('./capabilities/plans/test/failure_test.plan.json');
       await this.capabilityRegistry.registerPlan(failureTestPlan.default as AgenticPlan);
       
-      console.log('Capabilities loaded successfully');
+      this.logger.info('Capabilities loaded successfully');
     } catch (error) {
-      console.error('Error loading capabilities:', error);
+      this.logger.error({ error }, 'Error loading capabilities');
       throw error;
     }
   }
 
   async stop(): Promise<void> {
-    console.log('Stopping Agentic MCP Server...');
+    this.logger.info('Stopping Agentic MCP Server...');
     
     if (this.apiServer) {
       await this.apiServer.close();
-      console.log('API server stopped');
+      this.logger.info('API server stopped');
     }
     
     await this.capabilityEventBus.disconnect();
-    console.log('Capability event bus disconnected');
+    this.logger.info('Capability event bus disconnected');
     
     await this.redis.disconnect();
-    console.log('Redis connection closed');
+    this.logger.info('Redis connection closed');
     
-    console.log('Agentic MCP Server stopped');
+    this.logger.info('Agentic MCP Server stopped');
   }
 
   // Getters for accessing components (useful for testing and API endpoints)
@@ -204,31 +204,26 @@ export class AgenticMCPServer {
 
 // Main entry point
 async function main() {
-  const server = new AgenticMCPServer({
-    redisUrl: process.env.REDIS_URL,
-    sandboxServiceUrl: process.env.SANDBOX_SERVICE_URL,
-    apiPort: process.env.API_PORT ? parseInt(process.env.API_PORT) : 3000,
-    adminApiKey: process.env.ADMIN_API_KEY
-  });
+  const server = new AgenticMCPServer();
   
   try {
     await server.start();
     
     // Keep the process running
     process.on('SIGINT', async () => {
-      console.log('Received SIGINT, shutting down gracefully...');
+      logger.info('Received SIGINT, shutting down gracefully...');
       await server.stop();
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
-      console.log('Received SIGTERM, shutting down gracefully...');
+      logger.info('Received SIGTERM, shutting down gracefully...');
       await server.stop();
       process.exit(0);
     });
     
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.fatal({ error }, 'Failed to start server');
     process.exit(1);
   }
 }

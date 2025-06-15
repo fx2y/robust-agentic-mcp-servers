@@ -4,6 +4,7 @@ import { IStateStore } from './state/state-store.interface';
 import { SessionCore, HistoryEntry } from './state/types';
 import { AgenticPlan } from './agentic-plan/types';
 import { IPlanExecutor } from './agentic-plan/plan-executor.interface';
+import pino from 'pino';
 
 export interface IWorkflowManager {
   createSession(sessionId?: string): Promise<SessionCore>;
@@ -25,6 +26,7 @@ export class WorkflowManager implements IWorkflowManager {
   constructor(
     private toolExecutor: IToolExecutor,
     private stateStore: IStateStore,
+    private logger: pino.Logger,
     private planExecutor?: IPlanExecutor
   ) {}
 

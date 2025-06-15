@@ -1,20 +1,21 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { CapabilityListing, RegisterCapabilityRequest, DiscoverCapabilitiesRequest } from './types';
+import { CapabilityListing, DiscoverCapabilitiesRequest } from './types';
 import { ApiDependencies } from './index';
 import { ToolDefinition } from '../core/tool-definition';
 import { AgenticPlan } from '../core/agentic-plan/plan-executor';
 
 export async function capabilityRoutes(fastify: FastifyInstance) {
-  const { centralCapabilityStore, capabilityEventEmitter, adminApiKey } = fastify.dependencies as ApiDependencies;
+  const { centralCapabilityStore } = fastify.dependencies as ApiDependencies;
 
-  const authenticationHook = async (request: FastifyRequest, reply: FastifyReply) => {
-    const authHeader = request.headers.authorization as string;
-    const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!adminApiKey || apiKey !== adminApiKey) {
-      reply.code(401).send({ error: 'Unauthorized' });
-      return;
-    }
-  };
+  // Authentication hook for future admin endpoints
+  // const authenticationHook = async (request: FastifyRequest, reply: FastifyReply) => {
+  //   const authHeader = request.headers.authorization as string;
+  //   const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  //   if (!adminApiKey || apiKey !== adminApiKey) {
+  //     reply.code(401).send({ error: 'Unauthorized' });
+  //     return;
+  //   }
+  // };
 
   const listCapabilitiesSchema = {
     response: {
@@ -51,27 +52,28 @@ export async function capabilityRoutes(fastify: FastifyInstance) {
     }
   };
 
-  const registerCapabilitySchema = {
-    body: {
-      type: 'object',
-      properties: {
-        type: { type: 'string', enum: ['tool', 'plan'] },
-        definition: { type: 'object' }
-      },
-      required: ['type', 'definition'],
-      additionalProperties: false
-    },
-    response: {
-      201: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          status: { type: 'string' }
-        },
-        required: ['id', 'status']
-      }
-    }
-  };
+  // Schema for future admin capability registration endpoint
+  // const registerCapabilitySchema = {
+  //   body: {
+  //     type: 'object',
+  //     properties: {
+  //       type: { type: 'string', enum: ['tool', 'plan'] },
+  //       definition: { type: 'object' }
+  //     },
+  //     required: ['type', 'definition'],
+  //     additionalProperties: false
+  //   },
+  //   response: {
+  //     201: {
+  //       type: 'object',
+  //       properties: {
+  //         id: { type: 'string' },
+  //         status: { type: 'string' }
+  //       },
+  //       required: ['id', 'status']
+  //     }
+  //   }
+  // };
 
   fastify.get('/', {
     schema: listCapabilitiesSchema
