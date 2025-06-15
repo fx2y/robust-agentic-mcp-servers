@@ -1,43 +1,104 @@
 import { ToolDefinition, PureToolImplementation } from './tool-definition';
-import { AgenticPlan } from './agentic-plan/types';
+import { AgenticPlan } from './agentic-plan/plan-executor';
+import { ICentralCapabilityStore } from './central-capability-store.interface';
+import { ICapabilityEventListener } from './capability-events.interface';
 
 export interface ICapabilityRegistry {
   // Tool-specific methods (from Phase 1)
-  registerTool(definition: ToolDefinition, implementation: PureToolImplementation): void;
-  getToolDefinition(id: string): ToolDefinition | undefined;
+  registerTool(definition: ToolDefinition, implementation: PureToolImplementation): Promise<void>;
+  getToolDefinition(id: string): Promise<ToolDefinition | undefined>;
   getToolImplementation(id: string): PureToolImplementation | undefined;
-  listAllToolDefinitions(): ToolDefinition[];
+  listAllToolDefinitions(): Promise<ToolDefinition[]>;
 
   // Plan-specific methods
-  registerPlan(plan: AgenticPlan): void;
-  getPlan(id: string): AgenticPlan | undefined;
-  listAllPlans(): AgenticPlan[];
+  registerPlan(plan: AgenticPlan): Promise<void>;
+  getPlan(id: string): Promise<AgenticPlan | undefined>;
+  listAllPlans(): Promise<AgenticPlan[]>;
 
   // Unified discovery method
-  listAllCapabilities(): { tools: ToolDefinition[], plans: AgenticPlan[] };
+  listAllCapabilities(): Promise<{ tools: ToolDefinition[], plans: AgenticPlan[] }>;
 
   // Legacy methods for backward compatibility
-  register(definition: ToolDefinition, implementation: PureToolImplementation): void;
-  getDefinition(id: string): ToolDefinition | undefined;
+  register(definition: ToolDefinition, implementation: PureToolImplementation): Promise<void>;
+  getDefinition(id: string): Promise<ToolDefinition | undefined>;
   getImplementation(id: string): PureToolImplementation | undefined;
-  listAllDefinitions(): ToolDefinition[];
+  listAllDefinitions(): Promise<ToolDefinition[]>;
 }
 
 export class CapabilityRegistry implements ICapabilityRegistry {
   private definitions = new Map<string, ToolDefinition>();
   private implementations = new Map<string, PureToolImplementation>();
   private plans = new Map<string, AgenticPlan>();
+  private isInitialized = false;
+
+  constructor(
+    private centralStore: ICentralCapabilityStore,
+    private eventListener: ICapabilityEventListener
+  ) {
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners(): void {
+    this.eventListener.on('capability.updated', (id, type) => {
+      this.invalidateLocalCache(id);
+    });
+    
+    this.eventListener.on('capability.deleted', (id, type) => {
+      this.removeFromLocalCache(id);
+    });
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.isInitialized) return;
+    
+    await this.syncFromCentralStore();
+    this.isInitialized = true;
+  }
+
+  private async syncFromCentralStore(): Promise<void> {
+    const capabilities = await this.centralStore.listAll();
+    
+    for (const capability of capabilities) {
+      if (capability.type === 'tool') {
+        this.definitions.set(capability.id, capability.definition as ToolDefinition);
+      } else if (capability.type === 'plan') {
+        this.plans.set(capability.id, capability.definition as AgenticPlan);
+      }
+    }
+  }
+
+  private async invalidateLocalCache(id: string): Promise<void> {
+    const capability = await this.centralStore.get(id);
+    if (capability) {
+      if (capability.type === 'tool') {
+        this.definitions.set(id, capability.definition as ToolDefinition);
+      } else if (capability.type === 'plan') {
+        this.plans.set(id, capability.definition as AgenticPlan);
+      }
+    }
+  }
+
+  private removeFromLocalCache(id: string): void {
+    this.definitions.delete(id);
+    this.plans.delete(id);
+    this.implementations.delete(id);
+  }
 
   // Tool-specific methods
-  registerTool(definition: ToolDefinition, implementation: PureToolImplementation): void {
+  async registerTool(definition: ToolDefinition, implementation: PureToolImplementation): Promise<void> {
+    await this.ensureInitialized();
+    
     if (this.definitions.has(definition.id)) {
       throw new Error(`Tool with ID '${definition.id}' is already registered`);
     }
+    
+    await this.centralStore.save(definition.id, 'tool', definition);
     this.definitions.set(definition.id, definition);
     this.implementations.set(definition.id, implementation);
   }
 
-  getToolDefinition(id: string): ToolDefinition | undefined {
+  async getToolDefinition(id: string): Promise<ToolDefinition | undefined> {
+    await this.ensureInitialized();
     return this.definitions.get(id);
   }
 
@@ -45,12 +106,15 @@ export class CapabilityRegistry implements ICapabilityRegistry {
     return this.implementations.get(id);
   }
 
-  listAllToolDefinitions(): ToolDefinition[] {
+  async listAllToolDefinitions(): Promise<ToolDefinition[]> {
+    await this.ensureInitialized();
     return Array.from(this.definitions.values());
   }
 
   // Plan-specific methods
-  registerPlan(plan: AgenticPlan): void {
+  async registerPlan(plan: AgenticPlan): Promise<void> {
+    await this.ensureInitialized();
+    
     // Ensure JSON serializability
     try {
       const serialized = JSON.stringify(plan);
@@ -67,40 +131,45 @@ export class CapabilityRegistry implements ICapabilityRegistry {
     if (this.plans.has(plan.planId)) {
       throw new Error(`Plan with ID '${plan.planId}' is already registered`);
     }
+    
+    await this.centralStore.save(plan.planId, 'plan', plan);
     this.plans.set(plan.planId, plan);
   }
 
-  getPlan(id: string): AgenticPlan | undefined {
+  async getPlan(id: string): Promise<AgenticPlan | undefined> {
+    await this.ensureInitialized();
     return this.plans.get(id);
   }
 
-  listAllPlans(): AgenticPlan[] {
+  async listAllPlans(): Promise<AgenticPlan[]> {
+    await this.ensureInitialized();
     return Array.from(this.plans.values());
   }
 
   // Unified discovery method
-  listAllCapabilities(): { tools: ToolDefinition[], plans: AgenticPlan[] } {
+  async listAllCapabilities(): Promise<{ tools: ToolDefinition[], plans: AgenticPlan[] }> {
+    await this.ensureInitialized();
     return {
-      tools: this.listAllToolDefinitions(),
-      plans: this.listAllPlans()
+      tools: await this.listAllToolDefinitions(),
+      plans: await this.listAllPlans()
     };
   }
 
   // Legacy methods for backward compatibility
-  register(definition: ToolDefinition, implementation: PureToolImplementation): void {
-    this.registerTool(definition, implementation);
+  async register(definition: ToolDefinition, implementation: PureToolImplementation): Promise<void> {
+    await this.registerTool(definition, implementation);
   }
 
-  getDefinition(id: string): ToolDefinition | undefined {
-    return this.getToolDefinition(id);
+  async getDefinition(id: string): Promise<ToolDefinition | undefined> {
+    return await this.getToolDefinition(id);
   }
 
   getImplementation(id: string): PureToolImplementation | undefined {
     return this.getToolImplementation(id);
   }
 
-  listAllDefinitions(): ToolDefinition[] {
-    return this.listAllToolDefinitions();
+  async listAllDefinitions(): Promise<ToolDefinition[]> {
+    return await this.listAllToolDefinitions();
   }
 
   private hasNonSerializableProperties(original: any, parsed: any): boolean {

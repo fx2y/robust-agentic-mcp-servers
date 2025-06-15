@@ -2,10 +2,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { IToolExecutor, ToolExecutionRequest, ToolExecutionResult } from './tool-executor';
 import { IStateStore } from './state/state-store.interface';
 import { SessionCore, HistoryEntry } from './state/types';
+import { AgenticPlan } from './agentic-plan/types';
 
 export interface IWorkflowManager {
   createSession(sessionId?: string): Promise<SessionCore>;
-  getSession(sessionId: string): Promise<{ core: SessionCore; context: Record<string, any> } | null>;
+  getSession(sessionId: string): Promise<{ core: SessionCore; context: Record<string, any>; history: HistoryEntry[] } | null>;
   executeToolInSession(
     sessionId: string,
     request: ToolExecutionRequest,
@@ -15,6 +16,8 @@ export interface IWorkflowManager {
     context: Record<string, any>;
     result: ToolExecutionResult;
   }>;
+  executePlan(sessionId: string, plan: AgenticPlan, initialArgs?: Record<string, any>): Promise<SessionCore>;
+  resumeSession(sessionId: string, input: Record<string, any>): Promise<SessionCore>;
 }
 
 export class WorkflowManager implements IWorkflowManager {
@@ -38,14 +41,15 @@ export class WorkflowManager implements IWorkflowManager {
     return { ...core };
   }
 
-  async getSession(sessionId: string): Promise<{ core: SessionCore; context: Record<string, any> } | null> {
+  async getSession(sessionId: string): Promise<{ core: SessionCore; context: Record<string, any>; history: HistoryEntry[] } | null> {
     const core = await this.stateStore.readSessionCore(sessionId);
     if (!core) {
       return null;
     }
 
     const context = await this.stateStore.getContext(sessionId);
-    return { core: { ...core }, context: { ...context } };
+    const history = await this.stateStore.getHistory(sessionId);
+    return { core: { ...core }, context: { ...context }, history };
   }
 
   async executeToolInSession(
@@ -123,5 +127,15 @@ export class WorkflowManager implements IWorkflowManager {
         }
       };
     }
+  }
+
+  async executePlan(sessionId: string, plan: AgenticPlan, initialArgs?: Record<string, any>): Promise<SessionCore> {
+    // This is a placeholder - in a real implementation, this would delegate to PlanExecutor
+    throw new Error('executePlan not yet implemented - should delegate to PlanExecutor');
+  }
+
+  async resumeSession(sessionId: string, input: Record<string, any>): Promise<SessionCore> {
+    // This is a placeholder - in a real implementation, this would delegate to PlanExecutor
+    throw new Error('resumeSession not yet implemented - should delegate to PlanExecutor');
   }
 }

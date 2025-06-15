@@ -95,6 +95,10 @@ export class InMemoryStateStore implements IStateStore {
     Object.assign(context, updates);
   }
 
+  async getHistory(sessionId: string, limit?: number): Promise<HistoryEntry[]> {
+    return this.readHistory(sessionId, limit);
+  }
+
   async uploadBlob(data: Buffer, contentType: string): Promise<string> {
     const uri = `blob://${uuidv4()}`;
     this.blobs.set(uri, { data: Buffer.from(data), contentType });

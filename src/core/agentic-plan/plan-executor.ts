@@ -1,6 +1,9 @@
 import Ajv from 'ajv';
 import { IPlanExecutor } from './plan-executor.interface';
 import { AgenticPlan, PlanStep, ContextValuePointer, ToolCallStep, ConditionalBranchStep, ParallelBranchStep, LoopOverItemsStep, HumanInTheLoopStep, FinalResponseStep } from './types';
+
+// Re-export types for external consumption
+export { AgenticPlan, PlanStep, ContextValuePointer } from './types';
 import { SessionCore } from '../state/types';
 import { IWorkflowManager } from '../workflow-manager';
 import { ICapabilityRegistry } from '../capability-registry';
@@ -65,13 +68,13 @@ export class PlanExecutor implements IPlanExecutor {
     await this.updateContext(sessionId, { human_input: humanInput });
 
     // Get the plan from registry
-    const plan = this.capabilityRegistry.getPlan(session.core.currentPlanId);
+    const plan = await this.capabilityRegistry.getPlan(session.core.currentPlanId);
     if (!plan) {
       throw new Error(`Plan with ID '${session.core.currentPlanId}' not found`);
     }
 
     // Find the current step and get its next step
-    const currentStep = plan.steps.find(s => s.id === session.core.currentStepId);
+    const currentStep = plan.steps.find((s: PlanStep) => s.id === session.core.currentStepId);
     if (!currentStep || currentStep.type !== 'human_in_the_loop') {
       throw new Error('Current step is not a human_in_the_loop step');
     }

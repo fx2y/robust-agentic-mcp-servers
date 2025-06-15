@@ -38,7 +38,7 @@ export class ToolExecutor implements IToolExecutor {
     result: ToolExecutionResult;
     newContext: Record<string, any>;
   }> {
-    const definition = this.registry.getDefinition(request.toolId);
+    const definition = await this.registry.getDefinition(request.toolId);
     const implementation = this.registry.getImplementation(request.toolId);
     if (!definition || !implementation) {
       return {

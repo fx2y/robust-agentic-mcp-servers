@@ -10,6 +10,7 @@ export interface IStateStore {
   getContext(sessionId: string): Promise<Record<string, any>>;
   setContext(sessionId: string, context: Record<string, any>): Promise<void>;
   updateContext(sessionId: string, updates: Record<string, any>): Promise<void>; // Atomic partial update
+  getHistory(sessionId: string, limit?: number): Promise<HistoryEntry[]>; // Alias for readHistory
   uploadBlob(data: Buffer, contentType: string): Promise<string>; // Returns URI
   downloadBlob(uri: string): Promise<Buffer>;
 }
