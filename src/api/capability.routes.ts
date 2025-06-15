@@ -8,7 +8,8 @@ export async function capabilityRoutes(fastify: FastifyInstance) {
   const { centralCapabilityStore, capabilityEventEmitter, adminApiKey } = fastify.dependencies as ApiDependencies;
 
   const authenticationHook = async (request: FastifyRequest, reply: FastifyReply) => {
-    const apiKey = request.headers['x-api-key'] as string;
+    const authHeader = request.headers.authorization as string;
+    const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
     if (!adminApiKey || apiKey !== adminApiKey) {
       reply.code(401).send({ error: 'Unauthorized' });
       return;
@@ -113,30 +114,4 @@ export async function capabilityRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post<{ Body: RegisterCapabilityRequest }>('/admin/capabilities', {
-    schema: registerCapabilitySchema,
-    preHandler: authenticationHook
-  }, async (request: FastifyRequest<{ Body: RegisterCapabilityRequest }>, reply: FastifyReply) => {
-    try {
-      const { type, definition } = request.body;
-      const id = 'id' in definition ? definition.id : definition.planId;
-      
-      if (!id) {
-        reply.code(400).send({ error: 'Capability definition must have an id or planId' });
-        return;
-      }
-
-      await centralCapabilityStore.save(id, type, definition);
-      
-      await capabilityEventEmitter.emit({
-        type: 'capability.updated',
-        id,
-        capabilityType: type
-      });
-
-      reply.code(201).send({ id, status: 'registered' });
-    } catch (error) {
-      reply.code(500).send({ error: 'Failed to register capability' });
-    }
-  });
 }

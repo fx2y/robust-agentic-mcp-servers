@@ -1,0 +1,24 @@
+{
+  "plan": {
+    "planId": "interaction::greeting",
+    "description": "Asks for a user's name and then greets them.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    },
+    "startStepId": "ask_for_name",
+    "steps": [
+      {
+        "id": "ask_for_name",
+        "type": "human_in_the_loop",
+        "message": "What is your name?",
+        "nextStepId": "greet_user"
+      },
+      {
+        "id": "greet_user",
+        "type": "final_response",
+        "message": { "jsonPath": "$.context.human_input.name" }
+      }
+    ]
+  }
+}

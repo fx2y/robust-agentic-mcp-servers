@@ -3,6 +3,7 @@ import { IToolExecutor, ToolExecutionRequest, ToolExecutionResult } from './tool
 import { IStateStore } from './state/state-store.interface';
 import { SessionCore, HistoryEntry } from './state/types';
 import { AgenticPlan } from './agentic-plan/types';
+import { IPlanExecutor } from './agentic-plan/plan-executor.interface';
 
 export interface IWorkflowManager {
   createSession(sessionId?: string): Promise<SessionCore>;
@@ -23,7 +24,8 @@ export interface IWorkflowManager {
 export class WorkflowManager implements IWorkflowManager {
   constructor(
     private toolExecutor: IToolExecutor,
-    private stateStore: IStateStore
+    private stateStore: IStateStore,
+    private planExecutor?: IPlanExecutor
   ) {}
 
   async createSession(sessionId?: string): Promise<SessionCore> {
@@ -130,12 +132,16 @@ export class WorkflowManager implements IWorkflowManager {
   }
 
   async executePlan(sessionId: string, plan: AgenticPlan, initialArgs?: Record<string, any>): Promise<SessionCore> {
-    // This is a placeholder - in a real implementation, this would delegate to PlanExecutor
-    throw new Error('executePlan not yet implemented - should delegate to PlanExecutor');
+    if (!this.planExecutor) {
+      throw new Error('PlanExecutor not configured in WorkflowManager');
+    }
+    return await this.planExecutor.execute(sessionId, plan, initialArgs);
   }
 
   async resumeSession(sessionId: string, input: Record<string, any>): Promise<SessionCore> {
-    // This is a placeholder - in a real implementation, this would delegate to PlanExecutor
-    throw new Error('resumeSession not yet implemented - should delegate to PlanExecutor');
+    if (!this.planExecutor) {
+      throw new Error('PlanExecutor not configured in WorkflowManager');
+    }
+    return await this.planExecutor.resume(sessionId, input);
   }
 }

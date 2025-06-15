@@ -2,9 +2,10 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { SessionCore, HistoryEntry } from '../shared/types';
 import { CreateSessionRequest, ExecutePlanRequest, ResumeSessionRequest } from './types';
 import { ApiDependencies } from './index';
+import { AgenticPlan } from '../core/agentic-plan/types';
 
 export async function sessionRoutes(fastify: FastifyInstance) {
-  const { workflowManager } = fastify.dependencies as ApiDependencies;
+  const { workflowManager, centralCapabilityStore } = fastify.dependencies as ApiDependencies;
 
   const createSessionSchema = {
     body: {
@@ -77,9 +78,13 @@ export async function sessionRoutes(fastify: FastifyInstance) {
       type: 'object',
       properties: {
         plan: { type: 'object' },
+        planId: { type: 'string' },
         initialArgs: { type: 'object' }
       },
-      required: ['plan'],
+      anyOf: [
+        { required: ['plan'] },
+        { required: ['planId'] }
+      ],
       additionalProperties: false
     },
     response: {
@@ -153,9 +158,26 @@ export async function sessionRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { sessionId: string }, Body: ExecutePlanRequest }>, reply: FastifyReply) => {
     try {
       const { sessionId } = request.params;
-      const { plan, initialArgs } = request.body;
+      const { plan, planId, initialArgs } = request.body;
       
-      const result = await workflowManager.executePlan(sessionId, plan, initialArgs);
+      let actualPlan = plan;
+      
+      // If planId is provided, look up the plan
+      if (planId && !plan) {
+        const planRecord = await centralCapabilityStore.get(planId);
+        if (!planRecord || planRecord.type !== 'plan') {
+          reply.code(404).send({ error: `Plan with ID '${planId}' not found` });
+          return;
+        }
+        actualPlan = planRecord.definition as any;
+      }
+      
+      if (!actualPlan) {
+        reply.code(400).send({ error: 'Either plan or planId must be provided' });
+        return;
+      }
+      
+      const result = await workflowManager.executePlan(sessionId, actualPlan, initialArgs);
       reply.code(202).send({ sessionId: result.sessionId, status: result.status });
     } catch (error) {
       reply.code(500).send({ error: 'Failed to execute plan' });

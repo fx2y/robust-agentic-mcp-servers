@@ -52,7 +52,6 @@ export class AgenticMCPServer {
     // Initialize core components
     this.toolExecutor = new ToolExecutor(this.capabilityRegistry);
     this.stateStore = new InMemoryStateStore();
-    this.workflowManager = new WorkflowManager(this.toolExecutor, this.stateStore);
     this.contextResolver = new ContextResolver();
     this.eventBus = new InMemoryEventBus();
     
@@ -61,6 +60,9 @@ export class AgenticMCPServer {
       this.config.sandboxServiceUrl || 'http://localhost:8080'
     );
     
+    // Initialize workflow manager first (without plan executor)
+    this.workflowManager = new WorkflowManager(this.toolExecutor, this.stateStore);
+    
     // Initialize plan executor with event emitter
     this.planExecutor = new PlanExecutor(
       this.workflowManager,
@@ -68,6 +70,9 @@ export class AgenticMCPServer {
       this.contextResolver,
       this.eventBus
     );
+    
+    // Now inject the plan executor back into workflow manager
+    (this.workflowManager as any).planExecutor = this.planExecutor;
 
     // Initialize supervisor service
     this.supervisorService = new SupervisorService(
@@ -109,7 +114,7 @@ export class AgenticMCPServer {
       adminApiKey: this.config.adminApiKey
     });
     
-    const port = this.config.apiPort || 8080;
+    const port = this.config.apiPort || 3000;
     await this.apiServer.listen({ port, host: '0.0.0.0' });
     console.log(`MCP Server listening on port ${port}`);
     
@@ -202,7 +207,7 @@ async function main() {
   const server = new AgenticMCPServer({
     redisUrl: process.env.REDIS_URL,
     sandboxServiceUrl: process.env.SANDBOX_SERVICE_URL,
-    apiPort: process.env.API_PORT ? parseInt(process.env.API_PORT) : 8080,
+    apiPort: process.env.API_PORT ? parseInt(process.env.API_PORT) : 3000,
     adminApiKey: process.env.ADMIN_API_KEY
   });
   

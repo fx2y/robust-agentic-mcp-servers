@@ -38,5 +38,60 @@ export async function createApiServer(dependencies: ApiDependencies): Promise<Fa
   await server.register(sessionRoutes, { prefix: '/sessions' });
   await server.register(capabilityRoutes, { prefix: '/capabilities' });
 
+  // Admin routes
+  server.post('/admin/capabilities', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['tool', 'plan'] },
+          definition: { type: 'object' }
+        },
+        required: ['type', 'definition'],
+        additionalProperties: false
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            status: { type: 'string' }
+          },
+          required: ['id', 'status']
+        }
+      }
+    },
+    preHandler: async (request, reply) => {
+      const authHeader = request.headers.authorization as string;
+      const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+      if (!dependencies.adminApiKey || apiKey !== dependencies.adminApiKey) {
+        reply.code(401).send({ error: 'Unauthorized' });
+        return;
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { type, definition } = request.body as any;
+      const id = 'id' in definition ? definition.id : definition.planId;
+      
+      if (!id) {
+        reply.code(400).send({ error: 'Capability definition must have an id or planId' });
+        return;
+      }
+
+      await dependencies.centralCapabilityStore.save(id, type, definition);
+      
+      await dependencies.capabilityEventEmitter.emit({
+        type: 'capability.updated',
+        id,
+        capabilityType: type
+      });
+
+      reply.code(201).send({ id, status: 'registered' });
+    } catch (error) {
+      reply.code(500).send({ error: 'Failed to register capability' });
+    }
+  });
+
   return server;
 }

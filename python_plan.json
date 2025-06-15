@@ -1,0 +1,24 @@
+{
+  "plan": {
+    "planId": "test::python_exec",
+    "description": "Executes a simple python script.",
+    "parameters": {},
+    "startStepId": "run_code",
+    "steps": [
+      {
+        "id": "run_code",
+        "type": "tool_call",
+        "toolId": "quick-data::execute_python_code",
+        "arguments": {
+          "code": "import sys; result = {'in': sys.version, 'out': 'success'}; print('Python version:', sys.version)"
+        },
+        "nextStepId": "finish"
+      },
+      { 
+        "id": "finish", 
+        "type": "final_response", 
+        "message": "Python code executed successfully." 
+      }
+    ]
+  }
+}

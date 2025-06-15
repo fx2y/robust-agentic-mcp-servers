@@ -11,7 +11,8 @@ export interface CreateSessionRequest {
 }
 
 export interface ExecutePlanRequest {
-  plan: AgenticPlan;
+  plan?: AgenticPlan;
+  planId?: string;
   initialArgs?: Record<string, any>;
 }
 

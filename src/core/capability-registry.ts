@@ -88,10 +88,7 @@ export class CapabilityRegistry implements ICapabilityRegistry {
   async registerTool(definition: ToolDefinition, implementation: PureToolImplementation): Promise<void> {
     await this.ensureInitialized();
     
-    if (this.definitions.has(definition.id)) {
-      throw new Error(`Tool with ID '${definition.id}' is already registered`);
-    }
-    
+    // Make registration idempotent - update if already exists
     await this.centralStore.save(definition.id, 'tool', definition);
     this.definitions.set(definition.id, definition);
     this.implementations.set(definition.id, implementation);
@@ -128,10 +125,7 @@ export class CapabilityRegistry implements ICapabilityRegistry {
       throw new Error(`Plan is not JSON serializable: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    if (this.plans.has(plan.planId)) {
-      throw new Error(`Plan with ID '${plan.planId}' is already registered`);
-    }
-    
+    // Make registration idempotent - update if already exists
     await this.centralStore.save(plan.planId, 'plan', plan);
     this.plans.set(plan.planId, plan);
   }
