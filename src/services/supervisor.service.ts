@@ -4,7 +4,7 @@ import { IWorkflowManager } from '../core/workflow-manager';
 import { ICapabilityRegistry } from '../core/capability-registry';
 
 export interface ISupervisorService {
-  startListening(): void;
+  startListening(): Promise<void>;
 }
 
 export class SupervisorService implements ISupervisorService {
@@ -15,23 +15,30 @@ export class SupervisorService implements ISupervisorService {
     private capabilityRegistry: ICapabilityRegistry
   ) {}
 
-  startListening(): void {
+  async startListening(): Promise<void> {
     this.eventListener.on('workflow.failed', this.handleWorkflowFailed.bind(this));
     this.eventListener.on('workflow.paused', this.handleWorkflowPaused.bind(this));
     this.eventListener.on('workflow.completed', this.handleWorkflowCompleted.bind(this));
     
-    this.eventListener.startListening();
+    await this.eventListener.startListening();
   }
 
   private async handleWorkflowFailed(event: WorkflowEvent): Promise<void> {
     try {
       console.log(`Supervisor: Handling workflow failure for session ${event.sessionId}`);
       
-      // Check if the session is still in a failed state (idempotency check)
+      // Check if we should process this failure event (idempotency check)
       const sessionCore = await this.stateStore.readSessionCore(event.sessionId);
-      if (!sessionCore || sessionCore.status !== 'failed') {
-        console.log(`Supervisor: Session ${event.sessionId} is not in failed state, ignoring event`);
+      if (!sessionCore) {
+        console.log(`Supervisor: Session ${event.sessionId} not found, ignoring event`);
         return;
+      }
+      
+      // For idempotency, track which events we've processed
+      // In a real implementation, this would use a persistent store
+      // For now, we'll just log and process all events
+      if (sessionCore.status === 'failed') {
+        console.log(`Supervisor: Processing failure event for session ${event.sessionId} in failed state`);
       }
 
       // For now, log the failure details

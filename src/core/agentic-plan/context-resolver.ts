@@ -12,8 +12,19 @@ export class ContextResolver implements IContextResolver {
         wrap: false
       });
 
+      // For filter expressions that don't match, return empty array
+      if (result === undefined && pointer.jsonPath.includes('[?(@.')) {
+        return [];
+      }
+
+      // Return undefined for non-existent paths
       if (result === undefined) {
-        throw new Error(`JSONPath ${pointer.jsonPath} resolved to undefined`);
+        return undefined;
+      }
+
+      // Return empty arrays as-is for non-matching filters
+      if (Array.isArray(result) && result.length === 0) {
+        return result;
       }
 
       // If result is an array with one element, return the element directly

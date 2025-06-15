@@ -129,6 +129,7 @@ export class PlanExecutor implements IPlanExecutor {
     const session = await this.workflowManager.getSession(sessionId);
     const finalSession = session!.core;
     
+    // Only emit completion event if workflow completed successfully (not failed or paused)
     if (finalSession.status === 'completed') {
       const workflowEvent: WorkflowEvent = {
         type: 'workflow.completed',

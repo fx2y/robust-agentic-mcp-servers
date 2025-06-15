@@ -1,0 +1,14 @@
+{
+  "planId": "test::plan_that_fails",
+  "description": "A plan designed to fail.",
+  "parameters": {},
+  "startStepId": "failing_step",
+  "steps": [
+    {
+      "id": "failing_step",
+      "type": "tool_call",
+      "toolId": "test::always_fail",
+      "arguments": {}
+    }
+  ]
+}

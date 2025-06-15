@@ -51,7 +51,7 @@ export class AgenticMCPServer {
     await this.loadCapabilities();
     
     // Start the supervisor service to listen for workflow events
-    this.supervisorService.startListening();
+    await this.supervisorService.startListening();
     console.log('Supervisor service started and listening for workflow events');
     
     console.log('Agentic MCP Server started successfully');
@@ -73,12 +73,19 @@ export class AgenticMCPServer {
       const { definition: isPositiveDefinition, implementation: isPositiveImplementation } = await import('./capabilities/tools/validate/is_positive.tool');
       this.capabilityRegistry.registerTool(isPositiveDefinition, isPositiveImplementation);
       
+      // Load test tools
+      const { definition: alwaysFailDefinition, implementation: alwaysFailImplementation } = await import('./capabilities/tools/test/always_fail.tool');
+      this.capabilityRegistry.registerTool(alwaysFailDefinition, alwaysFailImplementation);
+      
       // Load plans
       const conditionalAddPlan = await import('./capabilities/plans/math/conditional_add.plan.json');
       this.capabilityRegistry.registerPlan(conditionalAddPlan.default as AgenticPlan);
       
       const greetingPlan = await import('./capabilities/plans/interaction/greeting.plan.json');
       this.capabilityRegistry.registerPlan(greetingPlan.default as AgenticPlan);
+      
+      const failureTestPlan = await import('./capabilities/plans/test/failure_test.plan.json');
+      this.capabilityRegistry.registerPlan(failureTestPlan.default as AgenticPlan);
       
       console.log('Capabilities loaded successfully');
     } catch (error) {
