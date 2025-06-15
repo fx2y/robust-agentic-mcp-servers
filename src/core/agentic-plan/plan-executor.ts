@@ -7,6 +7,7 @@ import { ICapabilityRegistry } from '../capability-registry';
 import { IContextResolver } from './context-resolver.interface';
 import { ToolExecutionRequest } from '../tool-executor';
 import { IStateStore } from '../state/state-store.interface';
+import { IWorkflowEventEmitter, WorkflowEvent } from '../event-bus';
 
 export class PlanExecutor implements IPlanExecutor {
   private ajv = new Ajv();
@@ -14,7 +15,8 @@ export class PlanExecutor implements IPlanExecutor {
   constructor(
     private workflowManager: IWorkflowManager,
     private capabilityRegistry: ICapabilityRegistry,
-    private contextResolver: IContextResolver
+    private contextResolver: IContextResolver,
+    private eventEmitter: IWorkflowEventEmitter
   ) {}
 
   async execute(sessionId: string, plan: AgenticPlan, initialArgs: any): Promise<SessionCore> {
@@ -105,13 +107,41 @@ export class PlanExecutor implements IPlanExecutor {
         };
 
         await this.updateSessionState(sessionId, plan.planId, currentStepId, 'failed', errorInfo);
+        
+        // Emit workflow.failed event
+        const workflowEvent: WorkflowEvent = {
+          type: 'workflow.failed',
+          sessionId,
+          timestamp: new Date().toISOString(),
+          details: {
+            reason: errorInfo.message,
+            currentStepId,
+            error: errorInfo
+          }
+        };
+        
+        await this.eventEmitter.emit(workflowEvent);
         break;
       }
     }
 
-    // Return final session state
+    // Return final session state and emit completion event if successful
     const session = await this.workflowManager.getSession(sessionId);
-    return session!.core;
+    const finalSession = session!.core;
+    
+    if (finalSession.status === 'completed') {
+      const workflowEvent: WorkflowEvent = {
+        type: 'workflow.completed',
+        sessionId,
+        timestamp: new Date().toISOString(),
+        details: {
+          reason: 'Workflow completed successfully'
+        }
+      };
+      await this.eventEmitter.emit(workflowEvent);
+    }
+    
+    return finalSession;
   }
 
   private async executeStep(sessionId: string, plan: AgenticPlan, step: PlanStep): Promise<string | null> {
@@ -274,6 +304,19 @@ export class PlanExecutor implements IPlanExecutor {
     const currentPlanId = session.context.currentPlanId || '';
     
     await this.updateSessionState(sessionId, currentPlanId, step.id, 'paused_on_human');
+
+    // Emit workflow.paused event
+    const workflowEvent: WorkflowEvent = {
+      type: 'workflow.paused',
+      sessionId,
+      timestamp: new Date().toISOString(),
+      details: {
+        reason: message,
+        currentStepId: step.id,
+        humanInputSchema: step.expectedInputSchema
+      }
+    };
+    await this.eventEmitter.emit(workflowEvent);
 
     // Return null to stop execution (will be resumed externally)
     return null;

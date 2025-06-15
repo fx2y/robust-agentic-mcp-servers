@@ -28,3 +28,12 @@ export { IContextResolver } from './agentic-plan/context-resolver.interface';
 export { ContextResolver } from './agentic-plan/context-resolver';
 export { IPlanExecutor } from './agentic-plan/plan-executor.interface';
 export { PlanExecutor } from './agentic-plan/plan-executor';
+
+// Event Bus exports
+export { 
+  WorkflowEvent, 
+  WorkflowEventHandler,
+  IWorkflowEventEmitter,
+  IWorkflowEventListener,
+  InMemoryEventBus
+} from './event-bus';

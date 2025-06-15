@@ -1,4 +1,4 @@
-import { CapabilityRegistry, ToolExecutor, PlanExecutor, InMemoryStateStore, ContextResolver, WorkflowManager } from './core';
+import { CapabilityRegistry, ToolExecutor, PlanExecutor, InMemoryStateStore, ContextResolver, WorkflowManager, InMemoryEventBus } from './core';
 import fs from 'fs';
 import path from 'path';
 
@@ -9,7 +9,8 @@ async function testCapabilities() {
   const toolExecutor = new ToolExecutor(capabilityRegistry);
   const contextResolver = new ContextResolver();
   const workflowManager = new WorkflowManager(toolExecutor, stateStore);
-  const planExecutor = new PlanExecutor(workflowManager, capabilityRegistry, contextResolver);
+  const eventBus = new InMemoryEventBus();
+  const planExecutor = new PlanExecutor(workflowManager, capabilityRegistry, contextResolver, eventBus);
 
   // Register tools
   const addTool = await import('./capabilities/tools/math/add.tool');
