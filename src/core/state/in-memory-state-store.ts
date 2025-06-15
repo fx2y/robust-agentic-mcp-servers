@@ -3,22 +3,22 @@ import { SessionCore, HistoryEntry } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 export class InMemoryStateStore implements IStateStore {
-  private sessions = new Map<string, SessionCore>();
+  private sessionCores = new Map<string, SessionCore>();
   private histories = new Map<string, HistoryEntry[]>();
   private contexts = new Map<string, Record<string, any>>();
   private blobs = new Map<string, { data: Buffer; contentType: string }>();
 
   async createSession(core: SessionCore): Promise<void> {
-    if (this.sessions.has(core.sessionId)) {
+    if (this.sessionCores.has(core.sessionId)) {
       throw new Error(`Session with ID '${core.sessionId}' already exists`);
     }
-    this.sessions.set(core.sessionId, { ...core });
+    this.sessionCores.set(core.sessionId, { ...core });
     this.histories.set(core.sessionId, []);
     this.contexts.set(core.sessionId, {});
   }
 
   async readSessionCore(sessionId: string): Promise<SessionCore | null> {
-    const session = this.sessions.get(sessionId);
+    const session = this.sessionCores.get(sessionId);
     return session ? { ...session } : null;
   }
 
@@ -27,7 +27,7 @@ export class InMemoryStateStore implements IStateStore {
     status: SessionCore['status'],
     error?: any
   ): Promise<void> {
-    const session = this.sessions.get(sessionId);
+    const session = this.sessionCores.get(sessionId);
     if (!session) {
       throw new Error(`Session with ID '${sessionId}' not found`);
     }
@@ -41,6 +41,16 @@ export class InMemoryStateStore implements IStateStore {
         stack: error.stack
       };
     }
+  }
+
+  async updateSessionCore(sessionId: string, updates: Partial<SessionCore>): Promise<void> {
+    const session = this.sessionCores.get(sessionId);
+    if (!session) {
+      throw new Error(`Session with ID '${sessionId}' not found`);
+    }
+
+    Object.assign(session, updates);
+    session.updatedAt = new Date().toISOString();
   }
 
   async appendToHistory(sessionId: string, entry: HistoryEntry): Promise<void> {

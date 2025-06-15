@@ -4,6 +4,7 @@ export interface IStateStore {
   createSession(core: SessionCore): Promise<void>;
   readSessionCore(sessionId: string): Promise<SessionCore | null>;
   updateSessionStatus(sessionId: string, status: SessionCore['status'], error?: any): Promise<void>;
+  updateSessionCore(sessionId: string, updates: Partial<SessionCore>): Promise<void>;
   appendToHistory(sessionId: string, entry: HistoryEntry): Promise<void>;
   readHistory(sessionId: string, limit?: number): Promise<HistoryEntry[]>;
   getContext(sessionId: string): Promise<Record<string, any>>;
