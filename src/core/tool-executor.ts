@@ -83,12 +83,23 @@ export class ToolExecutor implements IToolExecutor {
         };
       }
 
+      // Update context with tool output for state mediation
+      const newContext = {
+        ...sessionContext,
+        [`${request.toolId}_result`]: output,
+        lastToolExecution: {
+          toolId: request.toolId,
+          timestamp: new Date().toISOString(),
+          output
+        }
+      };
+
       return {
         result: {
           status: 'success',
           output
         },
-        newContext: sessionContext
+        newContext
       };
     } catch (error) {
       return {
